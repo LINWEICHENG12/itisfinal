@@ -101,6 +101,62 @@ void print_board(int board[][9]);
 
 void save_to_binary_file(int board[][9], int problem_id, const char* filename, int is_append);
 
+int solve(int puzzle[][9], int pos);
+
+int isValid(int number, int puzzle[][9], int row, int col);
+int isValid(int number, int puzzle[][9], int row, int col) {
+    int rowStart = (row / 3) * 3;
+    int colStart = (col / 3) * 3;
+    
+    for (int i = 0; i < 9; i++) {
+        // 檢查同一行
+        if (puzzle[row][i] == number) return 0;
+        
+        // 檢查同一列
+        if (puzzle[i][col] == number) return 0;
+        
+        // 檢查 3x3 小方格
+        if (puzzle[rowStart + (i / 3)][colStart + (i % 3)] == number) return 0;
+    }
+    
+    return 1;
+}
+
+int solve(int puzzle[][9], int pos) {
+    // 終止條件：所有位置都填完了
+    if (pos == 81) {
+        return 1;  // 成功解出
+    }
+    
+    // 將位置編號轉換為行列座標
+    int row = pos / 9;
+    int col = pos % 9;
+    
+    // 如果該位置已有數字，跳到下一個位置
+    if (puzzle[row][col] != 0) {
+        return solve(puzzle, pos + 1);
+    }
+    
+    // 嘗試填入數字 1-9
+    for (int num = 1; num <= 9; num++) {
+        // 檢查這個數字是否可以放在這個位置
+        if (isValid(num, puzzle, row, col)) {
+            // 暫時填入這個數字
+            puzzle[row][col] = num;
+            
+            // 遞迴處理下一個位置
+            if (solve(puzzle, pos + 1)) {
+                return 1;  // 成功找到解答
+            }
+            
+            // 如果遞迴失敗，回溯：清空該格
+            puzzle[row][col] = 0;
+        }
+    }
+    
+    // 所有數字都試過，仍無法解出
+    return 0;
+}
 void print_board(int board[][9]) {
     printf("\n +-------+-------+-------+\n");
     for (int i = 0; i < 9; i++) {
@@ -120,9 +176,20 @@ void print_board(int board[][9]) {
 }
 
 int main() {
-    read_from_binary_file(board, "sudoku.dat", 1); // 先讀取 sudoku.dat 的第 0 題
-    print_board(board);
-    save_to_text_file(board, "output.txt"); // 儲存盤面到 output.txt
+    // 讀取 sudoku.dat 的第 18 題（索引從 0 開始）
+    if (read_from_binary_file(board, "sudoku.dat", 17)) {
+        printf("\n原始盤面：\n");
+        print_board(board);
+        if (solve(board, 0)) {
+            printf("\n解答：\n");
+            print_board(board);
+        } else {
+            printf("\n此盤無解！\n");
+        }
+        save_to_text_file(board, "output.txt"); // 儲存解答到 output.txt
+    } else {
+        printf("\n讀取失敗！\n");
+    }
     return 0;
 }
 
