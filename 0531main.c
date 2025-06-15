@@ -1,13 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <conio.h> // 用於捕捉方向鍵輸入
+#include <windows.h>
+
+// ANSI escape codes for colors
+#define COLOR_RESET "\033[0m"
+#define COLOR_RED "\033[31m"
+#define COLOR_GREEN "\033[32m"
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_BLUE "\033[34m"
+#define COLOR_MAGENTA "\033[35m"
+#define COLOR_CYAN "\033[36m"
+#define COLOR_WHITE "\033[37m"
+
+// 全域顏色選擇
+char* BOARD_COLOR;
+char* CURSOR_COLOR;
+char* NUMBER_COLOR;
 
 //--- 函式原型宣告（prototype） -----------------------------------
 void print_board(int board[][9]);
 void print_board_beauty(int board[][9]);
-void play_game(void);
+void play_game(int difficulty);
 int solve(int puzzle[][9], int pos);
-int handle_input(void);
+int handle_input(int difficulty);
 int is_complete(void);
 int is_valid_solution(int puzzle[][9]);
 
@@ -23,6 +40,7 @@ void save_to_binary_file(int board[][9], int problem_id, const char* filename, i
 
 int read_from_text_file(int board[][9], const char* filename);
 int read_from_binary_file(int board[][9], const char* filename, int problem_index);
+void print_board_with_cursor(int board[][9], int cursor_row, int cursor_col);
 
 //--- 全域變數宣告 ---------------------------------------------------
 int board[9][9] = {
@@ -43,15 +61,120 @@ int error_count = 0;
 int move_history[81][3];
 int move_count = 0;
 
+// 新增光標位置全域變數
+int cursor_row = 0;
+int cursor_col = 0;
+
+// 新增計時功能變數
+time_t start_time;
+time_t end_time;
+
+// 定義 SudokuProblem 結構
+typedef struct {
+    int id;
+    int data[9][9];
+} SudokuProblem;
+
 //=== 第一段：檔案讀取、遊戲初始化、主程式 =================================
 
 int main() {
-    // 嘗試從 sudoku.dat 讀第 18 題 (index=17)
-    if (read_from_binary_file(board, "sudoku.dat", 17)) {
-        play_game();
-    } else {
-        printf("\n讀取失敗！\n");
+    SetConsoleOutputCP(65001); // 設定輸出為 UTF-8
+
+    int choice, problem_index, color_choice;
+    int difficulty = 0;
+    
+    printf("=== 數獨遊戲 ===\n");
+    
+    // 顏色選擇
+    printf("請選擇遊戲界面顏色：\n");
+    printf("1. 紅色\n");
+    printf("2. 綠色 (預設)\n");
+    printf("3. 藍色\n");
+    printf("4. 黃色\n");
+    printf("5. 洋紅色\n");
+    printf("6. 青色\n");
+    printf("請輸入選擇 (1-6): ");
+    scanf("%d", &color_choice);
+    
+    // 設置顏色
+    switch (color_choice) {
+        case 1:
+            BOARD_COLOR = COLOR_RED;
+            CURSOR_COLOR = COLOR_YELLOW;
+            NUMBER_COLOR = COLOR_RED;
+            break;
+        case 3:
+            BOARD_COLOR = COLOR_BLUE;
+            CURSOR_COLOR = COLOR_YELLOW;
+            NUMBER_COLOR = COLOR_BLUE;
+            break;
+        case 4:
+            BOARD_COLOR = COLOR_YELLOW;
+            CURSOR_COLOR = COLOR_RED;
+            NUMBER_COLOR = COLOR_YELLOW;
+            break;
+        case 5:
+            BOARD_COLOR = COLOR_MAGENTA;
+            CURSOR_COLOR = COLOR_YELLOW;
+            NUMBER_COLOR = COLOR_MAGENTA;
+            break;
+        case 6:
+            BOARD_COLOR = COLOR_CYAN;
+            CURSOR_COLOR = COLOR_RED;
+            NUMBER_COLOR = COLOR_CYAN;
+            break;
+        case 2:
+        default:
+            BOARD_COLOR = COLOR_GREEN;
+            CURSOR_COLOR = COLOR_YELLOW;
+            NUMBER_COLOR = COLOR_GREEN;
+            break;
     }
+    
+    printf("=== 數獨遊戲 ===\n");
+    printf("請選擇盤面來源：\n");
+    printf("1. 從 sudoku.dat 選擇預設盤面 (1-18)\n");
+    printf("2. 隨機生成新盤面\n");
+    printf("請輸入選擇 (1 或 2): ");
+    scanf("%d", &choice);
+      if (choice == 1) {
+        printf("請選擇盤面編號 (1-18): ");
+        scanf("%d", &problem_index);
+        if (problem_index < 1 || problem_index > 18) {
+            printf("無效的盤面編號，將使用預設盤面 (編號 1)。\n");
+            problem_index = 1;
+        }
+        
+        if (read_from_binary_file(board, "sudoku.dat", problem_index - 1)) {
+            // 從檔案讀取的盤面，難度設為預設2（中等）
+            difficulty = 2;
+            play_game(difficulty);
+        } else {
+            printf("\n讀取失敗！將使用預設盤面。\n");
+            play_game(difficulty); // 使用預設盤面
+        }
+    } else if (choice == 2) {
+        printf("請選擇難度 (1-簡單, 2-中等, 3-困難): ");
+        scanf("%d", &difficulty);
+        if (difficulty < 1 || difficulty > 3) {
+            printf("無效的難度選擇，將使用中等難度。\n");
+            difficulty = 2;
+        }
+        generate_random_sudoku(board, difficulty);
+        printf("已生成隨機數獨盤面 (難度: %d)\n", difficulty);
+        play_game(difficulty);
+    } else {
+        printf("無效的選擇，將使用預設盤面。\n");
+        // 嘗試從 sudoku.dat 讀第1題 (index=0)
+        difficulty = 2; // 預設難度
+        if (read_from_binary_file(board, "sudoku.dat", 0)) {
+            play_game(difficulty);
+        } else {
+            printf("\n讀取失敗！將使用內建預設盤面。\n");
+            play_game(difficulty); // 使用預設盤面
+        }
+    }
+    
     return 0;
 }
 
@@ -95,10 +218,6 @@ int read_from_binary_file(int board[][9], const char* filename, int problem_inde
         int numbers;
         int datasize;
     } SudokuDataHeader;
-    typedef struct {
-        int id;
-        int data[9][9];
-    } SudokuProblem;
 
     SudokuDataHeader header;
     fread(&header, sizeof(header), 1, fp);
@@ -121,39 +240,66 @@ int read_from_binary_file(int board[][9], const char* filename, int problem_inde
 }
 
 // 遊戲主流程
-void play_game() {
+void play_game(int difficulty) {
     printf("=== 數獨遊戲 ===\n");
-    printf("規則：輸入 行 列 數字 來填數字\n");
-    printf("錯誤5次遊戲結束\n\n");
-
-    // 初始化遊戲：「複製盤面」+「求解答案」+「錯誤歸零」+「動作歷史歸零」
+    // 顯示難度
+    printf("難度：");
+    switch (difficulty) {
+        case 1:
+            printf("簡單\n");
+            break;
+        case 2:
+            printf("中等\n");
+            break;
+        case 3:
+            printf("困難\n");
+            break;
+        default:
+            printf("未知\n");
+    }
+    printf("規則：\n");
+    printf("- 使用方向鍵移動光標\n");
+    printf("- 按 Enter 填寫數字\n");
+    printf("- 按 U 撤銷上一步操作\n");
+    printf("- 按 H 獲得提示\n");
+    printf("- 按 Q 結束遊戲\n");
+    printf("錯誤5次遊戲結束\n\n");    // 初始化遊戲：「複製盤面」+「求解答案」+「錯誤歸零」+「動作歷史歸零」
     for (int i = 0; i < 9; i++)
         for (int j = 0; j < 9; j++) {
             original_board[i][j] = board[i][j];
             player_board[i][j] = board[i][j];
             answer_board[i][j] = board[i][j];
         }
-    solve(answer_board, 0);
+    solve(answer_board, 0); // 求解答案盤面，但不顯示
     error_count = 0;
     move_count = 0;
+    cursor_row = 0; // 初始化光標位置
+    cursor_col = 0;
     printf("遊戲初始化完成！\n");
-
     printf("初始盤面：\n");
-    print_board(player_board);
-
-    // 互動迴圈
+    print_board_with_cursor(player_board, cursor_row, cursor_col); // 顯示初始盤面
+    
+    // 開始計時
+    start_time = time(NULL);    // 互動迴圈
     while (error_count < 5) {
-        int result = handle_input();
+        int result = handle_input(difficulty);
         if (result == -1) {
             printf("遊戲結束！\n");
             break;
         }
         if (result == 1) {
             printf("\n當前盤面：\n");
-            print_board(player_board);
+            print_board_with_cursor(player_board, cursor_row, cursor_col);
             if (is_complete()) {
                 if (is_valid_solution(player_board)) {
+                    // 記錄結束時間並計算經過的時間
+                    end_time = time(NULL);
+                    int elapsed_time = (int)difftime(end_time, start_time);
+                    int hours = elapsed_time / 3600;
+                    int minutes = (elapsed_time % 3600) / 60;
+                    int seconds = elapsed_time % 60;
                     printf("🎉 恭喜！你完成了數獨！\n");
+                    printf("您的完成時間：%02d:%02d:%02d\n", hours, minutes, seconds);
                 } else {
                     printf("盤面已填滿，但答案不正確，請檢查！\n");
                 }
@@ -164,39 +310,141 @@ void play_game() {
     if (error_count >= 5) {
         printf("💥 錯誤太多次，遊戲結束！\n");
         printf("正確答案：\n");
-        print_board(answer_board);
+        print_board(answer_board); // 遊戲結束後才顯示答案
     }
 }
 
 // 處理玩家輸入
-int handle_input(void) {
-    int row, col, num;
-    printf("請輸入 行 列 數字 (1-9)，或輸入 0 0 0 結束遊戲: ");
-    scanf("%d %d %d", &row, &col, &num);
-    if (row == 0 && col == 0 && num == 0) {
-        return -1; // 結束
+int handle_input(int difficulty) {
+    printf("使用方向鍵移動光標，按 Enter 填寫數字，Q 結束遊戲，U 撤銷，H 提示\n");
+    // 顯示已用時間和難度
+    time_t current_time = time(NULL);
+    int elapsed_time = (int)difftime(current_time, start_time);
+    int hours = elapsed_time / 3600;
+    int minutes = (elapsed_time % 3600) / 60;
+    int seconds = elapsed_time % 60;
+    
+    // 顯示難度
+    printf("難度：");
+    switch (difficulty) {
+        case 1:
+            printf("簡單 | ");
+            break;
+        case 2:
+            printf("中等 | ");
+            break;
+        case 3:
+            printf("困難 | ");
+            break;
+        default:
+            printf("未知 | ");
     }
-    if (row < 1 || row > 9 || col < 1 || col > 9 || num < 1 || num > 9) {
-        printf("輸入超出範圍！請輸入 1-9 之間的數字。\n");
-        return 0;
+    printf("已用時間：%02d:%02d:%02d\n", hours, minutes, seconds);
+    
+    while (1) {
+        print_board_with_cursor(player_board, cursor_row, cursor_col);
+        char key = getch(); // 捕捉按鍵輸入
+        if (key == 'q' || key == 'Q') {
+            return -1; // 結束遊戲
+        } else if (key == 'u' || key == 'U') {
+            undo_last_move();
+            continue;
+        } else if (key == 'h' || key == 'H') {
+            provide_hint();
+            return 1;
+        } else if (key == 13) { // Enter 鍵
+            int num;
+            printf("請輸入數字 (1-9): ");
+            scanf("%d", &num);
+            if (num < 1 || num > 9) {
+                printf(COLOR_RED "輸入超出範圍！請輸入 1-9 之間的數字。\n" COLOR_RESET);
+                continue;
+            }
+            if (original_board[cursor_row][cursor_col] != 0) {
+                printf(COLOR_YELLOW "該位置是原始數字，不能修改！\n" COLOR_RESET);
+                continue;
+            }
+            if (player_board[cursor_row][cursor_col] != 0) {
+                printf(COLOR_YELLOW "該位置已經填過數字了！\n" COLOR_RESET);
+                continue;
+            }
+            if (answer_board[cursor_row][cursor_col] == num) {
+                player_board[cursor_row][cursor_col] = num;
+                move_history[move_count][0] = cursor_row;
+                move_history[move_count][1] = cursor_col;
+                move_history[move_count][2] = num;
+                move_count++;
+                printf(COLOR_GREEN "正確！\n" COLOR_RESET);
+                return 1;
+            } else {
+                error_count++;
+                printf(COLOR_RED "錯誤！錯誤次數：%d\n" COLOR_RESET, error_count);
+                return 0;
+            }
+        } else if (key == -32) { // 方向鍵
+            key = getch(); // 捕捉方向鍵的具體值
+            switch (key) {
+                case 72: // 上
+                    if (cursor_row > 0) cursor_row--;
+                    break;
+                case 80: // 下
+                    if (cursor_row < 8) cursor_row++;
+                    break;
+                case 75: // 左
+                    if (cursor_col > 0) cursor_col--;
+                    break;
+                case 77: // 右
+                    if (cursor_col < 8) cursor_col++;
+                    break;
+            }
+        }
     }
-    row--; col--;
-    if (original_board[row][col] != 0) {
-        printf("該位置是原始數字，不能修改！\n");
-        return 0;
+}
+
+// 新增函式以顯示盤面並突出光標位置
+void print_board_with_cursor(int board[][9], int cursor_row, int cursor_col) {
+    printf("\n +-------+-------+-------+\n");
+    for (int i = 0; i < 9; i++) {
+        for (int j = 0; j < 9; j++) {
+            if (j % 3 == 0) printf(" | ");
+            else printf(" ");
+            if (i == cursor_row && j == cursor_col) {
+                printf("%s[%d]%s", CURSOR_COLOR, board[i][j] == 0 ? 0 : board[i][j], COLOR_RESET);
+            } else {
+                if (board[i][j] == 0) printf("_");
+                else printf("%s%d%s", NUMBER_COLOR, board[i][j], COLOR_RESET);
+            }
+        }
+        printf(" |\n");
+        if (i % 3 == 2) printf(" +-------+-------+-------+\n");
     }
-    if (player_board[row][col] != 0) {
-        printf("該位置已經填過數字了！\n");
-        return 0;
+}
+
+// 新增撤銷功能
+void undo_last_move() {
+    if (move_count == 0) {
+        printf("無法撤銷，沒有任何動作記錄！\n");
+        return;
     }
-    if (answer_board[row][col] == num) {
-        player_board[row][col] = num;
-        printf("正確！\n");
-    } else {
-        error_count++;
-        printf("錯誤！錯誤次數：%d\n", error_count);
+    int last_row = move_history[move_count - 1][0];
+    int last_col = move_history[move_count - 1][1];
+    player_board[last_row][last_col] = 0;
+    move_count--;
+    printf("已撤銷上一步操作。\n");
+}
+
+// 新增提示功能
+void provide_hint() {
+    for (int i = 0; i < 9; i++) {
+        for (int j = 0; j < 9; j++) {
+            if (player_board[i][j] == 0) {
+                player_board[i][j] = answer_board[i][j];
+                printf("提示：位置 (%d, %d) 的正確答案是 %d\n", i + 1, j + 1, answer_board[i][j]);
+                return;
+            }
+        }
     }
-    return 1;
+    printf("盤面已填滿，無法提供提示！\n");
 }
 
 // 檢查是否填滿
@@ -295,8 +543,8 @@ void print_board(int board[][9]) {
         for (int j = 0; j < 9; j++) {
             if (j % 3 == 0) printf(" | ");
             else printf(" ");
-            if (board[i][j] == 0) printf("_");
-            else printf("%d", board[i][j]);
+            if (board[i][j] == 0) printf(COLOR_YELLOW "_" COLOR_RESET);
+            else printf(COLOR_GREEN "%d" COLOR_RESET, board[i][j]);
         }
         printf(" |\n");
         if (i % 3 == 2) printf(" +-------+-------+-------+\n");
@@ -420,10 +668,6 @@ void save_to_binary_file(int board[][9], int problem_id, const char* filename, i
                 int numbers;
                 int datasize;
             } SudokuDataHeader;
-            typedef struct {
-                int id;
-                int data[9][9];
-            } SudokuProblem;
             SudokuDataHeader header = {1, sizeof(SudokuProblem)};
             fwrite(&header, sizeof(header), 1, fp);
         } else {
